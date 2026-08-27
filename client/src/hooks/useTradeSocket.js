@@ -11,7 +11,7 @@ function getSocketUrl() {
     import.meta.env.VITE_API_BASE_URL ||
     import.meta.env.VITE_API_URL ||
     'http://localhost:5000';
-  return envUrl;
+  return envUrl.replace(/\/+$/, '');
 }
 
 /**
@@ -54,9 +54,9 @@ export function useTradeSocket({
     const socketUrl = getSocketUrl();
     const isSecure = socketUrl.startsWith('https://');
 
-    // Initialize Socket.IO with explicit protocol configuration
+    // Initialize Socket.IO with standard HTTP handshake & WebSocket upgrade
     const socket = io(socketUrl, {
-      transports: ['websocket', 'polling'],
+      transports: ['polling', 'websocket'],
       secure: isSecure,
       rejectUnauthorized: isSecure,
       autoConnect: true,
@@ -74,7 +74,7 @@ export function useTradeSocket({
       setConnectionStatus('disconnected');
     });
 
-    socket.on('connect_error', () => {
+    socket.on('connect_error', (err) => {
       setConnectionStatus('disconnected');
     });
 
