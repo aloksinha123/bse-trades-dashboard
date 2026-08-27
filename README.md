@@ -12,9 +12,9 @@ The application connects to a simulated BSE trade endpoint that experiences conf
 ## 🏗️ Architecture (High Level)
 - **Frontend (`client/`)**: React application powered by Vite, providing instant UI loading and live streaming trade updates.
 - **Backend (`server/`)**: Modular Node.js / Express service architected with controllers, routes, services, database/storage layer, and WebSocket streaming capabilities.
+- **Persistence Layer (`server/src/db/`)**: Embedded SQLite storage (`server/data/trades.db`) maintaining "already pulled" trades with duplicate conflict resolution and pagination.
+- **Mock BSE API (`server/src/services/mockBse.service.js`)**: Deterministic 4,000-record Indian market trade generator with configurable artificial delay (`BSE_DELAY_MS`) up to 15 minutes.
 - **Documentation (`docs/`)**: Architecture diagrams and design notes.
-
-> **Note**: This assessment is being developed incrementally. Phase 1 establishes the clean project foundation and health verification.
 
 ---
 
@@ -44,6 +44,13 @@ Copy `.env.example` in `server/` (and root if needed):
 cp .env.example .env
 ```
 
+| Variable | Default | Description |
+| :--- | :--- | :--- |
+| `PORT` | `5000` | HTTP port for the Express backend server |
+| `NODE_ENV` | `development` | Application environment mode |
+| `BSE_DELAY_MS` | `5000` | Simulated upstream BSE delay in ms (supports up to `900000` ms / 15 mins) |
+| `DATABASE_PATH` | `./data/trades.db` | Path to SQLite database file |
+
 ---
 
 ## 🏃 Running the Application
@@ -72,19 +79,74 @@ The Vite dev server will typically be available at `http://localhost:5173`.
 
 ---
 
-## 🩺 Health Endpoint Verification
-You can test the server health endpoint:
-
+## 🧪 Automated Testing
+Run the backend test suite:
 ```bash
-# Using curl or browser
-curl http://localhost:5000/health
+cd server
+npm test
 ```
+Executes two comprehensive test suites:
+1. **Mock BSE Suite (`test/mockBse.test.js`)**: Schema, 4,000-count generation, 100% `tradeId` uniqueness, PRNG consistency, and delay validation/clamping.
+2. **Trade Repository & Persistence Suite (`test/tradeRepository.test.js`)**: Schema migration, initial 500-seed, duplicate insertion prevention, batch transactions, pagination, and persistence across database restarts.
+
+---
+
+## 📡 API Endpoints
+
+### 1. Health Check
+`GET /health`
 
 **Response:**
 ```json
 {
   "status": "ok"
 }
+```
+
+### 2. Persisted Trades (Application Storage)
+`GET /trades`
+
+> **Note**: Returns trades already stored in our application's SQLite database. Opens immediately without waiting for any upstream BSE latency. Supports optional pagination parameters `limit` (default: 50, max: 500) and `offset` (default: 0).
+
+**Example Requests:**
+```bash
+# Default first 50 records
+curl http://localhost:5000/trades
+
+# Paginated request
+curl "http://localhost:5000/trades?limit=10&offset=0"
+```
+
+**Response Format:**
+```json
+{
+  "success": true,
+  "count": 10,
+  "total": 500,
+  "limit": 10,
+  "offset": 0,
+  "data": [
+    {
+      "tradeId": "TRD-000500",
+      "client": "CLIENT-1010",
+      "symbol": "AXISBANK",
+      "quantity": 100,
+      "price": 1182.33,
+      "timestamp": "2026-08-27T15:30:04.000Z",
+      "createdAt": "2026-08-27 17:02:14"
+    }
+  ]
+}
+```
+
+### 3. Mock BSE Trade Feed (Simulated Upstream)
+`GET /getTrades`
+
+> **Note**: This endpoint intentionally simulates a slow upstream BSE API with configurable latency (`BSE_DELAY_MS`). For local testing, keep `BSE_DELAY_MS=5000` (5 seconds).
+
+**Example Request:**
+```bash
+curl http://localhost:5000/getTrades
 ```
 
 ---
@@ -95,12 +157,14 @@ bse-trades-dashboard/
 ├── client/              # React + Vite frontend
 ├── docs/                # Architecture and design documentation
 ├── server/              # Express backend
+│   ├── data/            # SQLite storage (trades.db)
+│   ├── test/            # Automated test suites
 │   └── src/
-│       ├── controllers/ # Request controllers
-│       ├── db/          # Storage / Database layer
-│       ├── routes/      # API Route definitions
-│       ├── services/    # Business logic & background workers
-│       ├── websocket/   # WebSocket communication layer
+│       ├── controllers/ # Request controllers (health, trades, persistedTrades)
+│       ├── db/          # Database connection, schema & repositories
+│       ├── routes/      # API Route definitions (health, trades, persistedTrades)
+│       ├── services/    # Mock BSE API service & generators
+│       ├── websocket/   # WebSocket communication layer (upcoming)
 │       ├── app.js       # Express application configuration
 │       └── server.js    # Entry point & HTTP listener
 ├── .env.example         # Root environment example
