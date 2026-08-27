@@ -1,11 +1,18 @@
 import { useState, useEffect, useRef } from 'react';
 import { io } from 'socket.io-client';
 
-const SOCKET_URL =
-  import.meta.env.VITE_SOCKET_URL ||
-  import.meta.env.VITE_API_BASE_URL ||
-  import.meta.env.VITE_API_URL ||
-  'http://localhost:5000';
+/**
+ * Resolves the Socket.IO server URL from environment variables,
+ * falling back to local HTTP backend.
+ */
+function getSocketUrl() {
+  const envUrl =
+    import.meta.env.VITE_SOCKET_URL ||
+    import.meta.env.VITE_API_BASE_URL ||
+    import.meta.env.VITE_API_URL ||
+    'http://localhost:5000';
+  return envUrl;
+}
 
 /**
  * Custom hook managing real-time Socket.IO connection and trade event subscriptions.
@@ -44,8 +51,16 @@ export function useTradeSocket({
   }, [onPullStarted, onTradesNew, onPullCompleted, onPullFailed]);
 
   useEffect(() => {
-    const socket = io(SOCKET_URL, {
+    const socketUrl = getSocketUrl();
+    const isSecure = socketUrl.startsWith('https://');
+
+    // Initialize Socket.IO with explicit protocol configuration
+    const socket = io(socketUrl, {
       transports: ['websocket', 'polling'],
+      secure: isSecure,
+      rejectUnauthorized: isSecure,
+      autoConnect: true,
+      reconnection: true,
       reconnectionAttempts: 10,
       reconnectionDelay: 1000
     });

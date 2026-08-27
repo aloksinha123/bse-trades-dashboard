@@ -54,6 +54,10 @@ export function TradeTable({ trades = [], newTradeIds = new Set() }) {
     setCurrentPage(1);
   };
 
+  // Determine current page count display
+  const displayedRowCount = Math.min(pageSize, paginatedTrades.length);
+  const isFiltered = selectedSymbol !== 'ALL' || searchQuery.trim().length > 0;
+
   return (
     <div className="table-card">
       <div className="table-toolbar">
@@ -92,8 +96,17 @@ export function TradeTable({ trades = [], newTradeIds = new Set() }) {
 
         <div className="toolbar-right">
           <span className="record-count-text">
-            Showing <strong>{filteredTrades.length.toLocaleString()}</strong> of{' '}
-            <strong>{trades.length.toLocaleString()}</strong> trades
+            {filteredTrades.length > 0 ? (
+              <>
+                Showing <strong>{displayedRowCount.toLocaleString()}</strong> of{' '}
+                <strong>{filteredTrades.length.toLocaleString()}</strong> trades
+                {isFiltered && (
+                  <span className="text-subtle"> ({trades.length.toLocaleString()} total)</span>
+                )}
+              </>
+            ) : (
+              <span>Showing <strong>0</strong> of <strong>0</strong> trades</span>
+            )}
           </span>
 
           <select

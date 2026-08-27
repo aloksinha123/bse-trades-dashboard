@@ -85,13 +85,14 @@ function App() {
       }
 
       // Sort newest timestamp first
-      return Array.from(tradeMap.values()).sort(
+      const mergedList = Array.from(tradeMap.values()).sort(
         (a, b) => new Date(b.timestamp) - new Date(a.timestamp)
       );
+
+      setTotalTrades(mergedList.length);
+      return mergedList;
     });
 
-    // Update total count and session new trades
-    setTotalTrades((prev) => (prev !== null ? prev + newlyArrivedTrades.length : newlyArrivedTrades.length));
     setSessionNewTrades((prev) => prev + newlyArrivedTrades.length);
 
     // Show temporary highlight on newly arrived trade IDs
