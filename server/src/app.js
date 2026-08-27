@@ -1,6 +1,8 @@
 const express = require('express');
 const cors = require('cors');
 const healthRoutes = require('./routes/health.routes');
+const tradesRoutes = require('./routes/trades.routes');
+const persistedTradesRoutes = require('./routes/persistedTrades.routes');
 
 const app = express();
 
@@ -11,6 +13,8 @@ app.use(express.urlencoded({ extended: true }));
 
 // Route Mounts
 app.use('/health', healthRoutes);
+app.use('/getTrades', tradesRoutes);
+app.use('/trades', persistedTradesRoutes);
 
 // Root fallback / info endpoint
 app.get('/', (req, res) => {
@@ -19,7 +23,9 @@ app.get('/', (req, res) => {
     version: '1.0.0',
     status: 'running',
     endpoints: {
-      health: '/health'
+      health: '/health',
+      getTrades: '/getTrades',
+      trades: '/trades'
     }
   });
 });
