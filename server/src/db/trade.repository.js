@@ -64,12 +64,13 @@ function insertTrade(trade) {
 /**
  * Inserts an array of trade records in a single atomic transaction.
  * Duplicates are safely ignored.
+ * Returns newly inserted trade records along with count statistics.
  * @param {Array<Object>} trades
- * @returns {{ insertedCount: number, totalProcessed: number }}
+ * @returns {{ insertedCount: number, duplicateCount: number, insertedTrades: Array<Object>, totalProcessed: number }}
  */
 function insertTrades(trades) {
   if (!Array.isArray(trades) || trades.length === 0) {
-    return { insertedCount: 0, totalProcessed: 0 };
+    return { insertedCount: 0, duplicateCount: 0, insertedTrades: [], totalProcessed: 0 };
   }
 
   const db = getDb();
@@ -79,12 +80,14 @@ function insertTrades(trades) {
   `);
 
   let insertedCount = 0;
+  const insertedTrades = [];
 
   const insertMany = db.transaction((records) => {
     for (const record of records) {
       const info = stmt.run(record);
       if (info.changes > 0) {
         insertedCount++;
+        insertedTrades.push(record);
       }
     }
   });
@@ -93,6 +96,8 @@ function insertTrades(trades) {
 
   return {
     insertedCount,
+    duplicateCount: trades.length - insertedCount,
+    insertedTrades,
     totalProcessed: trades.length
   };
 }

@@ -32,14 +32,23 @@ function createIsolatedTestRepository(dbPath) {
     countTrades: () => db.prepare('SELECT COUNT(*) as total FROM trades').get().total,
     insertTrades: (trades) => {
       let insertedCount = 0;
+      const insertedTrades = [];
       const tx = db.transaction((records) => {
         for (const r of records) {
           const info = insertStmt.run(r);
-          if (info.changes > 0) insertedCount++;
+          if (info.changes > 0) {
+            insertedCount++;
+            insertedTrades.push(r);
+          }
         }
       });
       tx(trades);
-      return { insertedCount, totalProcessed: trades.length };
+      return {
+        insertedCount,
+        duplicateCount: trades.length - insertedCount,
+        insertedTrades,
+        totalProcessed: trades.length
+      };
     },
     close: () => db.close()
   };
@@ -55,6 +64,14 @@ async function runPullManagerTests() {
   const testDbPath = path.join(testDbDir, `test_pull_${Date.now()}.db`);
   const testRepo = createIsolatedTestRepository(testDbPath);
   const pullManager = new PullManagerService();
+
+  const devDbPath = path.resolve(__dirname, '../data/trades.db');
+  let initialDevCount = 0;
+  if (fs.existsSync(devDbPath)) {
+    const devDb = new Database(devDbPath, { readonly: true });
+    initialDevCount = devDb.prepare('SELECT COUNT(*) as total FROM trades').get().total;
+    devDb.close();
+  }
 
   try {
     // Test 1: Immediate response & non-blocking execution (< 50ms)
@@ -157,15 +174,18 @@ async function runPullManagerTests() {
     assert.strictEqual(allJobs[0].jobId, failJob.jobId, 'Newest job should be first');
     console.log(`✓ Test 8 Passed: In-memory history returned ${allJobs.length} jobs.`);
 
-    // Test 9: Isolation verification: Ensure main dev database was NOT touched
+    // Test 9: Isolation verification: Ensure main dev database was NOT touched by the test run
     console.log('\nTest 9: Verifying development database isolation...');
-    const devDbPath = path.resolve(__dirname, '../data/trades.db');
     if (fs.existsSync(devDbPath)) {
-      const devDb = new Database(devDbPath);
-      const devCount = devDb.prepare('SELECT COUNT(*) as total FROM trades').get().total;
+      const devDb = new Database(devDbPath, { readonly: true });
+      const devCountAfter = devDb.prepare('SELECT COUNT(*) as total FROM trades').get().total;
       devDb.close();
-      assert.strictEqual(devCount, 500, 'Development database MUST remain exactly at initial 500 count');
-      console.log(`✓ Test 9 Passed: Development database untouched at ${devCount} records.`);
+      assert.strictEqual(
+        devCountAfter,
+        initialDevCount,
+        `Development database count must not be modified by tests (was ${initialDevCount}, is ${devCountAfter})`
+      );
+      console.log(`✓ Test 9 Passed: Development database untouched (maintained ${devCountAfter} records).`);
     } else {
       console.log('✓ Test 9 Passed: Development database does not exist yet (clean slate).');
     }
