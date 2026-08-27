@@ -63,7 +63,20 @@ export function TradeTable({ trades = [], newTradeIds = new Set() }) {
       <div className="table-toolbar">
         <div className="toolbar-left">
           <div className="search-input-wrapper">
-            <span className="search-icon">🔍</span>
+            <svg
+              className="search-svg-icon"
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
             <input
               type="text"
               className="search-input"
@@ -72,7 +85,11 @@ export function TradeTable({ trades = [], newTradeIds = new Set() }) {
               onChange={handleSearchChange}
             />
             {searchQuery && (
-              <button className="clear-btn" onClick={() => setSearchQuery('')}>
+              <button
+                className="clear-btn"
+                onClick={() => setSearchQuery('')}
+                title="Clear search"
+              >
                 ✕
               </button>
             )}
@@ -95,13 +112,13 @@ export function TradeTable({ trades = [], newTradeIds = new Set() }) {
         </div>
 
         <div className="toolbar-right">
-          <span className="record-count-text">
+          <span className="record-count-text tabular-nums">
             {filteredTrades.length > 0 ? (
               <>
                 Showing <strong>{displayedRowCount.toLocaleString()}</strong> of{' '}
                 <strong>{filteredTrades.length.toLocaleString()}</strong> trades
                 {isFiltered && (
-                  <span className="text-subtle"> ({trades.length.toLocaleString()} total)</span>
+                  <span className="text-muted"> ({trades.length.toLocaleString()} total)</span>
                 )}
               </>
             ) : (
@@ -139,7 +156,7 @@ export function TradeTable({ trades = [], newTradeIds = new Set() }) {
                 const isNew = newTradeIds.has(trade.tradeId);
                 return (
                   <tr key={trade.tradeId} className={isNew ? 'row-new-arrival' : ''}>
-                    <td className="monospace font-semibold">
+                    <td className="monospace font-semibold text-primary">
                       {trade.tradeId}
                       {isNew && <span className="badge-new-pill">NEW</span>}
                     </td>
@@ -147,13 +164,13 @@ export function TradeTable({ trades = [], newTradeIds = new Set() }) {
                     <td>
                       <span className="symbol-tag">{trade.symbol}</span>
                     </td>
-                    <td className="text-right monospace">
+                    <td className="text-right monospace tabular-nums">
                       {Number(trade.quantity).toLocaleString()}
                     </td>
-                    <td className="text-right monospace font-semibold text-price">
+                    <td className="text-right monospace font-semibold text-price tabular-nums">
                       ₹{Number(trade.price).toFixed(2)}
                     </td>
-                    <td className="text-right monospace text-secondary text-sm">
+                    <td className="text-right monospace text-muted text-sm tabular-nums">
                       {new Date(trade.timestamp).toLocaleTimeString([], {
                         hour: '2-digit',
                         minute: '2-digit',
@@ -179,7 +196,7 @@ export function TradeTable({ trades = [], newTradeIds = new Set() }) {
 
       {totalPages > 1 && (
         <div className="table-pagination">
-          <div className="pagination-info">
+          <div className="pagination-info tabular-nums">
             Page {safePage} of {totalPages}
           </div>
           <div className="pagination-buttons">
@@ -197,7 +214,7 @@ export function TradeTable({ trades = [], newTradeIds = new Set() }) {
             >
               ‹ Prev
             </button>
-            <span className="page-indicator">{safePage}</span>
+            <span className="page-indicator tabular-nums">{safePage}</span>
             <button
               className="btn-page"
               disabled={safePage >= totalPages}

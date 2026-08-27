@@ -6,14 +6,14 @@ export function DashboardHeader({ connectionStatus }) {
       case 'connected':
         return (
           <span className="live-status-pill connected" title="Real-time WebSocket active">
-            <span className="pulse-dot"></span>
+            <span className="status-indicator-dot connected"></span>
             LIVE Connected
           </span>
         );
       case 'connecting':
         return (
           <span className="live-status-pill connecting" title="Connecting to WebSocket">
-            <span className="pulse-dot pending"></span>
+            <span className="status-indicator-dot connecting"></span>
             Connecting...
           </span>
         );
@@ -21,7 +21,7 @@ export function DashboardHeader({ connectionStatus }) {
       default:
         return (
           <span className="live-status-pill disconnected" title="WebSocket disconnected">
-            <span className="pulse-dot error"></span>
+            <span className="status-indicator-dot disconnected"></span>
             Disconnected
           </span>
         );
@@ -31,16 +31,16 @@ export function DashboardHeader({ connectionStatus }) {
   return (
     <header className="dashboard-header">
       <div className="header-brand">
-        <div className="brand-icon">
-          <span>📈</span>
+        <div className="brand-badge">
+          <span className="brand-logo-text">BSE</span>
         </div>
-        <div>
+        <div className="brand-info">
           <div className="brand-title-row">
             <h1 className="brand-title">BSE Trades Monitor</h1>
-            <span className="market-tag">BSE Equity Feed</span>
+            <span className="market-tag">Equity Cash Feed</span>
           </div>
           <p className="brand-subtitle">
-            Real-time market trade ingestion & asynchronous pull streaming architecture
+            Real-time market trade ingestion &amp; asynchronous pull architecture
           </p>
         </div>
       </div>

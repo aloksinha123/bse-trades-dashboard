@@ -12,7 +12,7 @@ export function PullControlPanel({
         <div className="action-col">
           <button
             id="btn-start-pull"
-            className={`btn-pull ${isPulling ? 'loading' : ''}`}
+            className={`btn-primary ${isPulling ? 'loading' : ''}`}
             onClick={onTriggerPull}
             disabled={isPulling}
             title={isPulling ? 'A pull is already running in the background' : 'Trigger asynchronous BSE pull'}
@@ -24,7 +24,7 @@ export function PullControlPanel({
               </>
             ) : (
               <>
-                <span>▶</span>
+                <span className="btn-icon">▶</span>
                 <span>Start New Pull</span>
               </>
             )}
@@ -38,43 +38,47 @@ export function PullControlPanel({
           {currentJob ? (
             <div className="job-meta-grid">
               <div className="meta-item">
-                <span className="meta-label">Active Job ID:</span>
-                <span className="meta-val monospace">{currentJob.jobId}</span>
-              </div>
-              <div className="meta-item">
-                <span className="meta-label">Status:</span>
-                <span className={`meta-val badge-status ${currentJob.status}`}>
-                  {currentJob.status}
+                <span className="meta-label">Active Job ID</span>
+                <span className="meta-val monospace text-sm" title={currentJob.jobId}>
+                  {currentJob.jobId}
                 </span>
               </div>
               <div className="meta-item">
-                <span className="meta-label">Fetched:</span>
-                <span className="meta-val">
+                <span className="meta-label">Status</span>
+                <div>
+                  <span className={`badge-status-pill ${currentJob.status}`}>
+                    {currentJob.status}
+                  </span>
+                </div>
+              </div>
+              <div className="meta-item">
+                <span className="meta-label">Fetched</span>
+                <span className="meta-val tabular-nums">
                   {currentJob.totalFetched !== undefined ? Number(currentJob.totalFetched).toLocaleString() : '—'}
                 </span>
               </div>
               <div className="meta-item">
-                <span className="meta-label">Inserted (New):</span>
-                <span className="meta-val text-success">
+                <span className="meta-label">Inserted (New)</span>
+                <span className="meta-val text-success font-semibold tabular-nums">
                   {currentJob.insertedCount !== undefined ? Number(currentJob.insertedCount).toLocaleString() : '—'}
                 </span>
               </div>
               <div className="meta-item">
-                <span className="meta-label">Duplicates Ignored:</span>
-                <span className="meta-val text-muted">
+                <span className="meta-label">Duplicates Ignored</span>
+                <span className="meta-val text-muted tabular-nums">
                   {currentJob.duplicateCount !== undefined ? Number(currentJob.duplicateCount).toLocaleString() : '—'}
                 </span>
               </div>
               {currentJob.error && (
-                <div className="meta-item full-width error">
-                  <span className="meta-label">Error:</span>
-                  <span className="meta-val text-error">{currentJob.error}</span>
+                <div className="meta-item full-width">
+                  <span className="meta-label text-error font-semibold">Error Details</span>
+                  <span className="meta-val text-error text-sm">{currentJob.error}</span>
                 </div>
               )}
             </div>
           ) : (
             <div className="job-meta-empty">
-              <span>No pull active. Click "Start New Pull" to fetch real-time trades.</span>
+              <span>Ready. Click "Start New Pull" to trigger background BSE ingestion.</span>
             </div>
           )}
         </div>
@@ -82,7 +86,7 @@ export function PullControlPanel({
 
       {errorMessage && (
         <div className="control-panel-alert">
-          <span>⚠️ {errorMessage}</span>
+          <span>{errorMessage}</span>
         </div>
       )}
     </div>

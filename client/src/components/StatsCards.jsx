@@ -1,33 +1,33 @@
 import React from 'react';
 
 export function StatsCards({ totalTrades, pullStatus, lastPullTime, sessionNewTrades }) {
-  const getStatusDisplay = () => {
+  const getStatusBadge = () => {
     switch (pullStatus) {
       case 'running':
         return (
-          <div className="status-val running">
-            <span className="spinner-icon">⏳</span>
-            <span>Running</span>
-          </div>
+          <span className="badge-status-pill running">
+            <span className="inline-spinner"></span>
+            Running
+          </span>
         );
       case 'completed':
         return (
-          <div className="status-val completed">
-            <span>✅ Completed</span>
-          </div>
+          <span className="badge-status-pill completed">
+            Completed
+          </span>
         );
       case 'failed':
         return (
-          <div className="status-val failed">
-            <span>❌ Failed</span>
-          </div>
+          <span className="badge-status-pill failed">
+            Failed
+          </span>
         );
       case 'idle':
       default:
         return (
-          <div className="status-val ready">
-            <span>Ready</span>
-          </div>
+          <span className="badge-status-pill ready">
+            Ready
+          </span>
         );
     }
   };
@@ -37,21 +37,19 @@ export function StatsCards({ totalTrades, pullStatus, lastPullTime, sessionNewTr
       <div className="stat-card">
         <div className="stat-header">
           <span className="stat-label">Total Trades</span>
-          <span className="stat-icon">📊</span>
         </div>
-        <div className="stat-value">
+        <div className="stat-value tabular-nums">
           {totalTrades !== null ? Number(totalTrades).toLocaleString() : '—'}
         </div>
-        <div className="stat-subtext">Persisted in SQLite storage</div>
+        <div className="stat-subtext">Persisted in SQLite database</div>
       </div>
 
       <div className="stat-card">
         <div className="stat-header">
           <span className="stat-label">Pull Status</span>
-          <span className="stat-icon">⚡</span>
         </div>
         <div className="stat-value">
-          {getStatusDisplay()}
+          {getStatusBadge()}
         </div>
         <div className="stat-subtext">Background Ingestion State</div>
       </div>
@@ -59,9 +57,8 @@ export function StatsCards({ totalTrades, pullStatus, lastPullTime, sessionNewTr
       <div className="stat-card">
         <div className="stat-header">
           <span className="stat-label">Last Pull</span>
-          <span className="stat-icon">🕒</span>
         </div>
-        <div className="stat-value small">
+        <div className="stat-value text-secondary small tabular-nums">
           {lastPullTime ? new Date(lastPullTime).toLocaleTimeString() : 'Initial Seed'}
         </div>
         <div className="stat-subtext">
@@ -69,12 +66,11 @@ export function StatsCards({ totalTrades, pullStatus, lastPullTime, sessionNewTr
         </div>
       </div>
 
-      <div className="stat-card highlight">
+      <div className="stat-card">
         <div className="stat-header">
-          <span className="stat-label">New Trades Ingested</span>
-          <span className="stat-icon">🚀</span>
+          <span className="stat-label">New Ingested Trades</span>
         </div>
-        <div className="stat-value accent">
+        <div className="stat-value text-accent tabular-nums">
           +{Number(sessionNewTrades || 0).toLocaleString()}
         </div>
         <div className="stat-subtext">Received via Socket.IO push</div>
