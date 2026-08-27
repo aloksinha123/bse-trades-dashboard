@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
-    "test": "node test/mockBse.test.js && node test/tradeRepository.test.js"
+    "test": "node test/mockBse.test.js && node test/tradeRepository.test.js && node test/pullManager.test.js"
   },
   "dependencies": {
     "better-sqlite3": "^13.0.3",

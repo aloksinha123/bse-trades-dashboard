@@ -5,13 +5,14 @@ Technical assessment implementation for a real-time BSE Trades Dashboard featuri
 ---
 
 ## 📌 Project Overview
-The application connects to a simulated BSE trade endpoint that experiences configurable pull delays (from seconds up to 15 minutes). Because web infrastructure closes HTTP connections open longer than 30 seconds, this project decouples trade fetching into background execution and streams updates to the frontend in real time via WebSockets.
+The application connects to a simulated BSE trade endpoint that experiences configurable pull delays (from seconds up to 15 minutes). Because web infrastructure terminates HTTP connections open longer than 30 seconds, this project decouples trade fetching into an in-process background worker and streams updates to the frontend in real time.
 
 ---
 
 ## 🏗️ Architecture (High Level)
 - **Frontend (`client/`)**: React application powered by Vite, providing instant UI loading and live streaming trade updates.
-- **Backend (`server/`)**: Modular Node.js / Express service architected with controllers, routes, services, database/storage layer, and WebSocket streaming capabilities.
+- **Backend (`server/`)**: Modular Node.js / Express service architected with controllers, routes, services, database/storage layer, and background pull management.
+- **Asynchronous Background Pull Manager (`server/src/services/pullManager.service.js`)**: Decouples long-running BSE pulls from HTTP request lifecycles. Responds immediately (< 5 ms) with `jobId` and processes 4,000-trade batch ingestion in the background.
 - **Persistence Layer (`server/src/db/`)**: Embedded SQLite storage (`server/data/trades.db`) maintaining "already pulled" trades with duplicate conflict resolution and pagination.
 - **Mock BSE API (`server/src/services/mockBse.service.js`)**: Deterministic 4,000-record Indian market trade generator with configurable artificial delay (`BSE_DELAY_MS`) up to 15 minutes.
 - **Documentation (`docs/`)**: Architecture diagrams and design notes.
@@ -80,14 +81,15 @@ The Vite dev server will typically be available at `http://localhost:5173`.
 ---
 
 ## 🧪 Automated Testing
-Run the backend test suite:
+Run the complete backend test suite:
 ```bash
 cd server
 npm test
 ```
-Executes two comprehensive test suites:
+Executes three comprehensive test suites:
 1. **Mock BSE Suite (`test/mockBse.test.js`)**: Schema, 4,000-count generation, 100% `tradeId` uniqueness, PRNG consistency, and delay validation/clamping.
 2. **Trade Repository & Persistence Suite (`test/tradeRepository.test.js`)**: Schema migration, initial 500-seed, duplicate insertion prevention, batch transactions, pagination, and persistence across database restarts.
+3. **Pull Manager & Ingestion Suite (`test/pullManager.test.js`)**: Non-blocking immediate response (< 50 ms), running-to-completed transitions, 409 concurrency conflict lock, error resilience, and strict database isolation.
 
 ---
 
@@ -103,7 +105,80 @@ Executes two comprehensive test suites:
 }
 ```
 
-### 2. Persisted Trades (Application Storage)
+### 2. Trigger Background BSE Pull
+`POST /pull`
+
+> **Note**: Dispatches background pull asynchronously and returns HTTP `202 Accepted` immediately in `< 5 ms`. Does NOT block or wait for the slow upstream BSE delay.
+
+**Example Request:**
+```bash
+curl -X POST http://localhost:5000/pull
+```
+
+**Response Format:**
+```json
+{
+  "success": true,
+  "message": "Background pull initiated successfully.",
+  "job": {
+    "jobId": "pull-1787851645607-3hh60q",
+    "status": "running",
+    "createdAt": "2026-08-27T17:27:25.607Z",
+    "startedAt": "2026-08-27T17:27:25.607Z",
+    "completedAt": null,
+    "totalFetched": 0,
+    "insertedCount": 0,
+    "duplicateCount": 0,
+    "error": null
+  }
+}
+```
+
+### 3. Check Background Pull Job Status
+`GET /pull/:jobId`
+
+**Running Response:**
+```json
+{
+  "success": true,
+  "job": {
+    "jobId": "pull-1787851645607-3hh60q",
+    "status": "running",
+    "createdAt": "2026-08-27T17:27:25.607Z",
+    "startedAt": "2026-08-27T17:27:25.607Z",
+    "completedAt": null,
+    "totalFetched": 0,
+    "insertedCount": 0,
+    "duplicateCount": 0,
+    "error": null
+  }
+}
+```
+
+**Completed Response:**
+```json
+{
+  "success": true,
+  "job": {
+    "jobId": "pull-1787851645607-3hh60q",
+    "status": "completed",
+    "createdAt": "2026-08-27T17:27:25.607Z",
+    "startedAt": "2026-08-27T17:27:25.607Z",
+    "completedAt": "2026-08-27T17:27:30.646Z",
+    "totalFetched": 4000,
+    "insertedCount": 3500,
+    "duplicateCount": 500,
+    "error": null
+  }
+}
+```
+
+### 4. Pull History
+`GET /pulls` (or `GET /pull`)
+
+Returns in-memory history of recent background pull jobs.
+
+### 5. Persisted Trades (Application Storage)
 `GET /trades`
 
 > **Note**: Returns trades already stored in our application's SQLite database. Opens immediately without waiting for any upstream BSE latency. Supports optional pagination parameters `limit` (default: 50, max: 500) and `offset` (default: 0).
@@ -117,37 +192,10 @@ curl http://localhost:5000/trades
 curl "http://localhost:5000/trades?limit=10&offset=0"
 ```
 
-**Response Format:**
-```json
-{
-  "success": true,
-  "count": 10,
-  "total": 500,
-  "limit": 10,
-  "offset": 0,
-  "data": [
-    {
-      "tradeId": "TRD-000500",
-      "client": "CLIENT-1010",
-      "symbol": "AXISBANK",
-      "quantity": 100,
-      "price": 1182.33,
-      "timestamp": "2026-08-27T15:30:04.000Z",
-      "createdAt": "2026-08-27 17:02:14"
-    }
-  ]
-}
-```
-
-### 3. Mock BSE Trade Feed (Simulated Upstream)
+### 6. Mock BSE Trade Feed (Simulated Upstream)
 `GET /getTrades`
 
-> **Note**: This endpoint intentionally simulates a slow upstream BSE API with configurable latency (`BSE_DELAY_MS`). For local testing, keep `BSE_DELAY_MS=5000` (5 seconds).
-
-**Example Request:**
-```bash
-curl http://localhost:5000/getTrades
-```
+> **Note**: This endpoint intentionally simulates a slow upstream BSE API with configurable latency (`BSE_DELAY_MS`).
 
 ---
 
@@ -160,10 +208,10 @@ bse-trades-dashboard/
 │   ├── data/            # SQLite storage (trades.db)
 │   ├── test/            # Automated test suites
 │   └── src/
-│       ├── controllers/ # Request controllers (health, trades, persistedTrades)
+│       ├── controllers/ # Request controllers (health, trades, persistedTrades, pull)
 │       ├── db/          # Database connection, schema & repositories
-│       ├── routes/      # API Route definitions (health, trades, persistedTrades)
-│       ├── services/    # Mock BSE API service & generators
+│       ├── routes/      # API Route definitions (health, trades, persistedTrades, pull)
+│       ├── services/    # Mock BSE API service & Background Pull Manager
 │       ├── websocket/   # WebSocket communication layer (upcoming)
 │       ├── app.js       # Express application configuration
 │       └── server.js    # Entry point & HTTP listener

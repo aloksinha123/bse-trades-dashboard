@@ -11,46 +11,51 @@ The BSE Trades Dashboard technical assessment involves fetching trades from a si
 
 ---
 
-## Architectural Data Flow
+## Architectural Data Flow & Async Ingestion
 
 ```
-[Simulated Upstream]
-   Mock BSE API (GET /getTrades, up to 15m delay)
-           │
-           │ (Async background fetch - Future Phase 4)
-           ▼
-[Application Layer]
-   Background Pull Manager (Decoupled from client HTTP reqs)
-           │
-           ▼
-   Trade Repository (Parameterized SQL, Conflict Resolution)
-           │
-           ▼
-[Storage Layer]
-   SQLite Database (trades.db)
-   ├── Initial seed: 500 records
-   └── Unique tradeId indexing & timestamp ordering
-           │
-           ├──────────────────────────┐
-           ▼                          ▼
-   GET /trades (Fast Read)     WebSocket Event Stream (Future Phase 4)
-           │                          │
-           └──────────┬───────────────┘
-                      ▼
-[Presentation Layer]
-   React Trades Dashboard (Instant open & live push updates)
+Client / Caller
+       │
+       │ POST /pull
+       ▼
+Express API Layer
+       │
+       ├──────────────► Immediate HTTP 202 Response (< 5 ms)
+       │                 { success: true, job: { jobId, status: "running" } }
+       │
+       └──────────────► Background Pull Manager (In-Process Async Worker)
+                              │
+                              ▼
+                       Mock BSE API (GET /getTrades)
+                       (Waits up to 15 mins according to BSE_DELAY_MS)
+                              │
+                              ▼ (4,000 trades received)
+                       Trade Repository
+                       (Atomic transactional batch insert & duplicate filter)
+                              │
+                              ▼
+                       SQLite Storage (trades.db)
+                              │
+                              ▼ (Job completed: insertedCount: 3500, duplicates: 500)
+                       In-Memory Job Registry (status: "completed")
 ```
+
+### Resolving the 15-Minute vs. 30-Second Constraint
+By decoupling the pull trigger (`POST /pull`) from the slow upstream BSE fetch, the client connection is closed immediately in **< 5 ms**. The slow upstream operation runs safely in the background inside the Node.js event loop without risking HTTP timeout terminations.
 
 ---
 
 ## Architectural Separation of Endpoints
 
-| Endpoint | Layer | Purpose | Latency Profile |
-| :--- | :--- | :--- | :--- |
-| `GET /getTrades` | Mock Upstream Simulator | Generates 4,000 deterministic seeded records with simulated delay | Configurable (`BSE_DELAY_MS` up to 15 mins) |
-| `GET /trades` | Application Persistent Read | Reads already pulled trades from SQLite with pagination | Immediate (<10 ms) |
+| Endpoint | Method | Layer | Purpose | Latency Profile |
+| :--- | :--- | :--- | :--- | :--- |
+| `/getTrades` | `GET` | Mock Upstream Simulator | Generates 4,000 deterministic seeded records with simulated delay | Configurable (`BSE_DELAY_MS` up to 15 mins) |
+| `/trades` | `GET` | Application Persistent Read | Reads already pulled trades from SQLite with pagination | Immediate (< 10 ms) |
+| `/pull` | `POST` | Background Pull Engine | Initiates async background ingestion, returns `jobId` | Immediate (< 5 ms) |
+| `/pull/:jobId` | `GET` | In-Memory Job Registry | Checks status (`running`, `completed`, `failed`) and metrics | Immediate (< 2 ms) |
+| `/pulls` | `GET` | In-Memory Job Registry | Lists recent in-memory pull jobs history | Immediate (< 2 ms) |
 
-> **Note**: The background pull manager and WebSocket real-time delivery layer are intentionally decoupled and scheduled for subsequent phases.
+> **Single-Process Note**: Job metadata is tracked in an in-memory `Map<jobId, job>` (ephemeral), whereas all trade records are durably stored in SQLite (`trades.db`).
 
 ---
 
@@ -67,8 +72,12 @@ The BSE Trades Dashboard technical assessment involves fetching trades from a si
   - Repository layer with duplicate prevention and transactional batch insertion.
   - Initial 500-record seed representing "already pulled" trades.
   - Fast, paginated `GET /trades` read endpoint.
-- **Phase 4: Background Pull Manager & WebSocket Integration** (Upcoming ⏳)
-  - Asynchronous background worker bypassing the 30-second HTTP timeout.
-  - WebSocket/Socket.IO real-time event broadcasting.
-- **Phase 5: Trades Dashboard UI** (Upcoming ⏳)
-  - Instant loading dashboard with live updates and status indicators.
+- **Phase 4: Asynchronous Background Pull Manager** (Completed ✅)
+  - In-process background pull manager decoupling long BSE requests from HTTP clients.
+  - Immediate `POST /pull` (< 5 ms) returning `jobId`.
+  - `GET /pull/:jobId` state tracking (`running`, `completed`, `failed`) and metrics.
+  - Single-pull concurrency lock (HTTP 409 Conflict).
+- **Phase 5: WebSocket Layer & Real-time Integration** (Upcoming ⏳)
+  - Bidirectional communication & push notifications when pull completes.
+- **Phase 6: Live Trades Dashboard Frontend** (Upcoming ⏳)
+  - Instant loading dashboard with live push updates and status indicators.

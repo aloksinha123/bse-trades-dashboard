@@ -3,6 +3,7 @@ const cors = require('cors');
 const healthRoutes = require('./routes/health.routes');
 const tradesRoutes = require('./routes/trades.routes');
 const persistedTradesRoutes = require('./routes/persistedTrades.routes');
+const pullRoutes = require('./routes/pull.routes');
 
 const app = express();
 
@@ -15,6 +16,8 @@ app.use(express.urlencoded({ extended: true }));
 app.use('/health', healthRoutes);
 app.use('/getTrades', tradesRoutes);
 app.use('/trades', persistedTradesRoutes);
+app.use('/pull', pullRoutes);
+app.use('/pulls', pullRoutes);
 
 // Root fallback / info endpoint
 app.get('/', (req, res) => {
@@ -25,7 +28,10 @@ app.get('/', (req, res) => {
     endpoints: {
       health: '/health',
       getTrades: '/getTrades',
-      trades: '/trades'
+      trades: '/trades',
+      triggerPull: 'POST /pull',
+      pullStatus: 'GET /pull/:jobId',
+      pullHistory: 'GET /pulls'
     }
   });
 });
