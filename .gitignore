@@ -17,9 +17,13 @@ dist/
 build/
 out/
 
-# Logs
+# Logs & Databases
 logs/
 *.log
+*.db
+*.sqlite
+*.sqlite3
+data/
 
 # OS / Editor files
 .DS_Store
