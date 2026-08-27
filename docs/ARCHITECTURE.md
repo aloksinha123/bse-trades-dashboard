@@ -65,7 +65,8 @@ The BSE Trades Dashboard technical assessment involves fetching trades from a si
 1. **REST Endpoints (`GET /trades`)**: Used strictly for initial, factual reads and historical pagination upon dashboard mount.
 2. **Background Ingestion (`POST /pull`)**: Asynchronously pulls from slow upstream BSE without holding HTTP client connections open (< 5 ms response).
 3. **Socket.IO Event Stream**: Pushes newly ingested trade data directly to active dashboard sessions immediately upon database commit.
-4. **No Polling Guarantee**: No `setInterval`, no recursive `setTimeout`, no frontend polling loop, and no cron scheduler.
+4. **React Local State (`App.jsx`)**: Merges newly arrived trades by `tradeId` into the local collection in descending timestamp order, eliminating duplicate UI rows.
+5. **No Polling Guarantee**: No `setInterval`, no recursive `setTimeout`, no frontend polling loop, and no cron scheduler.
 
 ---
 
@@ -91,5 +92,7 @@ The BSE Trades Dashboard technical assessment involves fetching trades from a si
   - Socket.IO server attached to Node.js HTTP server.
   - Push events: `pull:started`, `trades:new` (with only newly inserted records), `pull:completed`, `pull:failed`.
   - Repository enhanced to capture newly inserted records in a single transactional batch.
-- **Phase 5B: Live Trades Dashboard Frontend** (Upcoming ⏳)
+- **Phase 5B: Live Trades Dashboard Frontend** (Completed ✅)
   - React dashboard consuming WebSocket events to dynamically append trades without page refresh.
+  - Interactive controls with search, symbol filters, paginated grid, stats cards, and real-time alerts.
+  - 100% verified zero-polling, non-blocking real-time streaming flow.
