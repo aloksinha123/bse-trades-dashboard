@@ -1,91 +1,209 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import * as api from './services/api';
+import { useTradeSocket } from './hooks/useTradeSocket';
+import { DashboardHeader } from './components/DashboardHeader';
+import { StatsCards } from './components/StatsCards';
+import { PullControlPanel } from './components/PullControlPanel';
+import { LiveUpdateBanner } from './components/LiveUpdateBanner';
+import { TradeTable } from './components/TradeTable';
 import './App.css';
 
 function App() {
-  const [healthStatus, setHealthStatus] = useState({ state: 'idle', data: null, error: null });
+  const [trades, setTrades] = useState([]);
+  const [totalTrades, setTotalTrades] = useState(null);
+  const [pullStatus, setPullStatus] = useState('idle'); // 'idle' | 'running' | 'completed' | 'failed'
+  const [currentJob, setCurrentJob] = useState(null);
+  const [lastPullTime, setLastPullTime] = useState(null);
+  const [sessionNewTrades, setSessionNewTrades] = useState(0);
+  const [newTradeIds, setNewTradeIds] = useState(new Set());
+  const [liveNotification, setLiveNotification] = useState(null);
+  const [errorMessage, setErrorMessage] = useState(null);
+  const [isLoadingInitial, setIsLoadingInitial] = useState(true);
 
-  const checkBackendHealth = async () => {
-    setHealthStatus({ state: 'loading', data: null, error: null });
+  const highlightTimerRef = useRef(null);
+
+  // Initial Data Load from GET /trades (Runs once on mount)
+  const loadInitialTrades = useCallback(async () => {
+    setIsLoadingInitial(true);
+    setErrorMessage(null);
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-      const response = await fetch(`${apiUrl}/health`);
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+      const response = await api.getTrades({ limit: 500, offset: 0 });
+      if (response.success && Array.isArray(response.data)) {
+        setTrades(response.data);
+        setTotalTrades(response.total !== undefined ? response.total : response.data.length);
       }
-      const data = await response.json();
-      setHealthStatus({ state: 'success', data, error: null });
     } catch (err) {
-      setHealthStatus({ state: 'error', data: null, error: err.message });
+      console.error('[Dashboard] Failed to load initial trades:', err);
+      setErrorMessage(`Failed to connect to backend: ${err.message}`);
+    } finally {
+      setIsLoadingInitial(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadInitialTrades();
+  }, [loadInitialTrades]);
+
+  // Real-Time Socket.IO Handlers
+  const handlePullStarted = useCallback((data) => {
+    setPullStatus('running');
+    setErrorMessage(null);
+    setCurrentJob((prev) => ({
+      ...(prev || {}),
+      jobId: data.jobId,
+      status: 'running',
+      startedAt: data.startedAt || new Date().toISOString(),
+      completedAt: null,
+      totalFetched: 0,
+      insertedCount: 0,
+      duplicateCount: 0,
+      error: null
+    }));
+  }, []);
+
+  const handleTradesNew = useCallback((data) => {
+    if (!data || !Array.isArray(data.trades) || data.trades.length === 0) {
+      return;
+    }
+
+    const newlyArrivedTrades = data.trades;
+
+    // Merge into local trade collection using Map by tradeId (newest first, zero duplicates)
+    setTrades((prevTrades) => {
+      const tradeMap = new Map();
+
+      // Add new incoming trades first
+      for (const t of newlyArrivedTrades) {
+        tradeMap.set(t.tradeId, t);
+      }
+
+      // Add existing trades
+      for (const t of prevTrades) {
+        if (!tradeMap.has(t.tradeId)) {
+          tradeMap.set(t.tradeId, t);
+        }
+      }
+
+      // Sort newest timestamp first
+      return Array.from(tradeMap.values()).sort(
+        (a, b) => new Date(b.timestamp) - new Date(a.timestamp)
+      );
+    });
+
+    // Update total count and session new trades
+    setTotalTrades((prev) => (prev !== null ? prev + newlyArrivedTrades.length : newlyArrivedTrades.length));
+    setSessionNewTrades((prev) => prev + newlyArrivedTrades.length);
+
+    // Show temporary highlight on newly arrived trade IDs
+    const newIdSet = new Set(newlyArrivedTrades.map((t) => t.tradeId));
+    setNewTradeIds(newIdSet);
+
+    if (highlightTimerRef.current) {
+      clearTimeout(highlightTimerRef.current);
+    }
+    highlightTimerRef.current = setTimeout(() => {
+      setNewTradeIds(new Set());
+    }, 6000);
+
+    // Display banner notification
+    setLiveNotification({
+      message: `+${newlyArrivedTrades.length.toLocaleString()} new trades received in real-time via Socket.IO!`,
+      timestamp: Date.now()
+    });
+  }, []);
+
+  const handlePullCompleted = useCallback((data) => {
+    setPullStatus('completed');
+    setLastPullTime(data.completedAt || new Date().toISOString());
+    setCurrentJob((prev) => ({
+      ...(prev || {}),
+      jobId: data.jobId,
+      status: 'completed',
+      totalFetched: data.totalFetched,
+      insertedCount: data.insertedCount,
+      duplicateCount: data.duplicateCount,
+      completedAt: data.completedAt || new Date().toISOString()
+    }));
+  }, []);
+
+  const handlePullFailed = useCallback((data) => {
+    setPullStatus('failed');
+    setErrorMessage(data.error || 'Background pull failed.');
+    setCurrentJob((prev) => ({
+      ...(prev || {}),
+      jobId: data.jobId,
+      status: 'failed',
+      error: data.error
+    }));
+  }, []);
+
+  // Connect to Socket.IO
+  const { connectionStatus } = useTradeSocket({
+    onPullStarted: handlePullStarted,
+    onTradesNew: handleTradesNew,
+    onPullCompleted: handlePullCompleted,
+    onPullFailed: handlePullFailed
+  });
+
+  // Action: Trigger Background Pull (POST /pull)
+  const handleTriggerPull = async () => {
+    setErrorMessage(null);
+    try {
+      const response = await api.startPull();
+      if (response.success && response.job) {
+        setPullStatus('running');
+        setCurrentJob(response.job);
+      }
+    } catch (err) {
+      if (err.status === 409) {
+        setErrorMessage('A pull is already in progress.');
+      } else {
+        setErrorMessage(`Failed to trigger pull: ${err.message}`);
+      }
     }
   };
 
-  useEffect(() => {
-    checkBackendHealth();
-  }, []);
-
   return (
-    <div className="app-container">
-      <header className="header-section">
-        <span className="badge">Phase 1 Foundation</span>
-        <h1 className="title">BSE Trades Dashboard</h1>
-        <p className="subtitle">
-          Real-time trade streaming and background ingestion architecture foundation.
-        </p>
-      </header>
+    <div className="dashboard-layout">
+      <DashboardHeader connectionStatus={connectionStatus} />
 
-      <main className="card-grid">
-        <div className="card">
-          <h2 className="card-title">
-            <span
-              className={`status-indicator ${
-                healthStatus.state === 'loading'
-                  ? 'pending'
-                  : healthStatus.state === 'error'
-                  ? 'error'
-                  : 'ready'
-              }`}
-            ></span>
-            Backend Connection Status
-          </h2>
-          <p style={{ color: 'var(--text-secondary)', marginBottom: '1rem', fontSize: '0.9rem' }}>
-            Tests connectivity with <code>GET /health</code> on the Express server.
-          </p>
-          <button className="btn" onClick={checkBackendHealth}>
-            {healthStatus.state === 'loading' ? 'Checking...' : 'Recheck /health'}
-          </button>
+      <LiveUpdateBanner
+        notification={liveNotification}
+        onDismiss={() => setLiveNotification(null)}
+      />
 
-          <div className="health-result">
-            {healthStatus.state === 'loading' && <span>Connecting to backend...</span>}
-            {healthStatus.state === 'success' && (
-              <pre>{JSON.stringify(healthStatus.data, null, 2)}</pre>
-            )}
-            {healthStatus.state === 'error' && (
-              <span style={{ color: '#f87171' }}>Error: {healthStatus.error}</span>
-            )}
-            {healthStatus.state === 'idle' && <span>Ready to check.</span>}
+      <main className="dashboard-content">
+        <StatsCards
+          totalTrades={totalTrades}
+          pullStatus={pullStatus}
+          lastPullTime={lastPullTime}
+          sessionNewTrades={sessionNewTrades}
+        />
+
+        <PullControlPanel
+          onTriggerPull={handleTriggerPull}
+          isPulling={pullStatus === 'running'}
+          currentJob={currentJob}
+          errorMessage={errorMessage}
+        />
+
+        <section className="trades-section">
+          <div className="section-header">
+            <h2 className="section-title">Market Trades Feed</h2>
+            <span className="section-caption">
+              Persisted SQLite records • Live Socket.IO streaming updates
+            </span>
           </div>
-        </div>
 
-        <div className="card">
-          <h2 className="card-title">Architecture Roadmap</h2>
-          <ul className="roadmap-list">
-            <li className="roadmap-item completed">
-              <span>✅</span> <strong>Phase 1:</strong> Setup & Backend Skeleton
-            </li>
-            <li className="roadmap-item">
-              <span>⏳</span> <strong>Phase 2:</strong> Mock BSE API & Data Seeding
-            </li>
-            <li className="roadmap-item">
-              <span>⏳</span> <strong>Phase 3:</strong> Background Pull Engine (&lt;30s timeout handler)
-            </li>
-            <li className="roadmap-item">
-              <span>⏳</span> <strong>Phase 4:</strong> WebSocket Real-time Push
-            </li>
-            <li className="roadmap-item">
-              <span>⏳</span> <strong>Phase 5:</strong> Live Trades Dashboard UI
-            </li>
-          </ul>
-        </div>
+          {isLoadingInitial ? (
+            <div className="loading-card">
+              <div className="loading-spinner"></div>
+              <p>Loading persisted trades...</p>
+            </div>
+          ) : (
+            <TradeTable trades={trades} newTradeIds={newTradeIds} />
+          )}
+        </section>
       </main>
     </div>
   );
