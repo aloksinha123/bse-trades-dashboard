@@ -1,0 +1,22 @@
+{
+  "name": "bse-trades-dashboard-monorepo",
+  "version": "1.0.0",
+  "description": "BSE Trades Dashboard - Real-time trade streaming and background pull system",
+  "private": true,
+  "scripts": {
+    "dev:server": "npm --prefix server run dev",
+    "start:server": "npm --prefix server start",
+    "dev:client": "npm --prefix client run dev",
+    "build:client": "npm --prefix client run build",
+    "install:all": "npm --prefix server install && npm --prefix client install"
+  },
+  "keywords": [
+    "bse",
+    "trades",
+    "dashboard",
+    "async-pull",
+    "websockets"
+  ],
+  "author": "",
+  "license": "ISC"
+}
