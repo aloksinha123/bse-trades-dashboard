@@ -328,7 +328,7 @@ node scripts/testWsClient.js
 
 ## Demo / Video
 
-Video Walkthrough: `<add link here before submission>`
+Video Walkthrough: `https://drive.google.com/file/d/1DYl6abgyGMfJwFbU98n65sa55HeXgPvi/view?usp=sharing`
 
 ---
 
