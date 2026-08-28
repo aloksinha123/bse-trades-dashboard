@@ -1,10 +1,11 @@
 /**
  * WebSocket Server Module (Socket.IO)
  * Attaches Socket.IO to the Node.js HTTP server, manages client connections,
- * and provides event broadcasting functions.
+ * and provides event broadcasting functions with standardized CORS origin validation.
  */
 const { Server } = require('socket.io');
 const EVENTS = require('./events');
+const { corsOriginValidator } = require('../config/cors.config');
 
 let ioInstance = null;
 
@@ -19,11 +20,11 @@ function initWebSocket(httpServer, options = {}) {
     return ioInstance;
   }
 
-  const clientOrigin = options.clientOrigin || process.env.CLIENT_ORIGIN || 'http://localhost:5173';
+  const corsOrigin = options.clientOrigin !== undefined ? options.clientOrigin : corsOriginValidator;
 
   const io = new Server(httpServer, {
     cors: {
-      origin: clientOrigin,
+      origin: corsOrigin,
       methods: ['GET', 'POST'],
       credentials: true
     },

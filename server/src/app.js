@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const { corsOptions } = require('./config/cors.config');
 const healthRoutes = require('./routes/health.routes');
 const tradesRoutes = require('./routes/trades.routes');
 const persistedTradesRoutes = require('./routes/persistedTrades.routes');
@@ -8,7 +9,7 @@ const pullRoutes = require('./routes/pull.routes');
 const app = express();
 
 // Global Middleware
-app.use(cors());
+app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
